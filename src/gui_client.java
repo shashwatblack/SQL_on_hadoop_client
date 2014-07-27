@@ -15,6 +15,9 @@ public class gui_client extends JFrame{
     private JTextField textInput;
     private JButton bttnExecute;
     private JTable tableOutput;
+    private JList list1;
+    private JButton clearButton;
+    private JButton resetButton;
     private Connection dbConnection;
     Statement stmt;
 
@@ -28,8 +31,15 @@ public class gui_client extends JFrame{
 
         //Connect Database
         try {
-            dbConnection = DriverManager.getConnection(
-                    "jdbc:postgresql://localhost:5432/postgres", "postgres", "password");
+            //dbConnection = DriverManager.getConnection(
+            //        "jdbc:postgresql://localhost:5432/postgres", "postgres", "password");
+            dbConnection = DriverManager.getConnection("jdbc:mysql://localhost/sampledb?" +
+                    "user=root&password=password");
+            DatabaseMetaData dbmd = dbConnection.getMetaData();
+            ResultSet dbrs = dbmd.getTables(null, null, "%", null);
+            while (dbrs.next()) {
+                System.out.println(dbrs.getString(3));
+            }
             stmt = dbConnection.createStatement(
                     ResultSet.TYPE_SCROLL_INSENSITIVE,
                     ResultSet.CONCUR_READ_ONLY);

@@ -1,9 +1,14 @@
+import javax.swing.*;
 import java.sql.*;
 
 public class Main {
 
     public static void main(String[] args) {
-
+        try {
+            UIManager.setLookAndFeel("com.seaglasslookandfeel.SeaGlassLookAndFeel");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
         //System.out.println("Hello World!");
         gui_client myClient = new gui_client();
         myClient.setVisible(true);
