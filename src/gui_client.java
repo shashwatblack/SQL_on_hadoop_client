@@ -28,8 +28,11 @@ public class gui_client extends JFrame{
 
         //Connect Database
         try {
-            dbConnection = DriverManager.getConnection("jdbc:postgresql://localhost:5432/postgres", "postgres", "password");
-            stmt = dbConnection.createStatement();
+            dbConnection = DriverManager.getConnection(
+                    "jdbc:postgresql://localhost:5432/postgres", "postgres", "password");
+            stmt = dbConnection.createStatement(
+                    ResultSet.TYPE_SCROLL_INSENSITIVE,
+                    ResultSet.CONCUR_READ_ONLY);
         }
         catch (SQLException ex){
             //ERROR Message Box
@@ -52,29 +55,39 @@ public class gui_client extends JFrame{
                 System.out.println("Executing \"" + inputQuery + "\"");
                 try {
                     ResultSet rs = stmt.executeQuery(inputQuery);
+                    System.out.println("Query executed");
                     ResultSetMetaData rsmd = rs.getMetaData();
                     int colCount = rsmd.getColumnCount();
                     String[] colNames = new String[colCount];
-                    for (int i = 1; i <= colCount; i++) {
-                        colNames[i] = rsmd.getColumnName(i);
+                    for (int i = 0; i < colCount; i++) {
+                        colNames[i] = rsmd.getColumnName(i+1);
                     }
                     String[] row = new String[colCount];
-                    //String[] allRows = new String[rs][colCount];
-                    String outStr = "";
+                    int rowCount = 0;
+                    try {
+                        rs.last();
+                        rowCount = rs.getRow();
+                        rs.beforeFirst();
+                    }
+                    catch(Exception ex) {
+                        ex.printStackTrace();
+                    }
+                    String[][] allRows = new String[rowCount][colCount];
+                    int count = 0;
                     while (rs.next()) {
                         for (int i = 0; i < colCount; i++) {
-                            row[i] = rs.getString(i + 1);
-                            outStr += "\t" + row[i];
+                            allRows[count][i] = rs.getString(i + 1);
                         }
-                        System.out.println(outStr);
+                        count++;
                     }
+                    //output results
+                    tableOutput.setModel(new DefaultTableModel(allRows, colNames));
                 }
                 catch (SQLException ex){
                     //ERROR Message Box
-                    System.out.println(ex.toString());
+                    System.out.println("Something's wrong - " + ex.toString());
                     ex.printStackTrace();
                 }
-                //output results
 
             }
         });
