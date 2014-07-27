@@ -4,8 +4,10 @@ public class Main {
 
     public static void main(String[] args) {
 
-        System.out.println("Hello World!");
-
+        //System.out.println("Hello World!");
+        gui_client myClient = new gui_client();
+        myClient.setVisible(true);
+        if (false) {
         try {
             Connection conn = DriverManager.getConnection(
                     "jdbc:postgresql://localhost:5432/postgres", "postgres", "password");
@@ -28,10 +30,6 @@ public class Main {
                     row[i] = rs.getString(i+1);
                     outStr += "\t" + row[i];
                 }
-//                int supplierID = rs.getInt("SUP_ID");
-//                float price = rs.getFloat("PRICE");
-//                int sales = rs.getInt("SALES");
-//                int total = rs.getInt("TOTAL");
                 System.out.println(outStr);
                 rowCount++;
             }
@@ -42,5 +40,5 @@ public class Main {
             System.out.println(ex.toString());
             ex.printStackTrace();
         }
-    }
+    }}
 }
