@@ -60,7 +60,7 @@ public class gui_client extends JFrame{
                     }
                     String[] row = new String[colCount];
                     //String[] allRows = new String[rs][colCount];
-                    String outStr;
+                    String outStr = "";
                     while (rs.next()) {
                         for (int i = 0; i < colCount; i++) {
                             row[i] = rs.getString(i + 1);
