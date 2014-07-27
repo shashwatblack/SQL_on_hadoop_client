@@ -59,7 +59,7 @@ public class gui_client extends JFrame{
                         colNames[i] = rsmd.getColumnName(i);
                     }
                     String[] row = new String[colCount];
-                    String[] allRows = new String[rs][colCount];
+                    //String[] allRows = new String[rs][colCount];
                     String outStr;
                     while (rs.next()) {
                         for (int i = 0; i < colCount; i++) {
