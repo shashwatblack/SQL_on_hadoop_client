@@ -1,0 +1,5 @@
+select * from myrecords;
+hello java;
+select * from table1 inner join table2
+where table1.id = 5
+limit 10;

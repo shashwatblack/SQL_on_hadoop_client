@@ -2,7 +2,13 @@ import javax.swing.*;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.table.TableModel;
+import java.awt.*;
 import java.awt.event.*;
+import java.io.BufferedReader;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.IOException;
 import java.sql.*;
 import java.util.List;
 import java.util.ArrayList;
@@ -19,6 +25,15 @@ public class gui_client extends JFrame{
     private JList listTables;
     private JButton bttnClear;
     private JButton bttnReset;
+    private JTable batchTableOutput;
+    private JList batchTablesList;
+    private JTextArea batchQueriesTextArea;
+    private JButton loadFileButton;
+    private JButton executeNextButton;
+    private JButton executeAllButton;
+    private JButton batchResetButton;
+
+    private FileDialog fd;
 
     private Connection dbConnection;
     private Statement stmt;
@@ -28,25 +43,30 @@ public class gui_client extends JFrame{
         super("SQL on Hadoop Client");
         setContentPane(rootPanel);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        tabPanel.setSelectedIndex(1);
         //setSize(550, 400);
         pack();
 
         //Connect Database
         try {
-            // For postgres connection
+            // == For postgres connection ==
             //dbConnection = DriverManager.getConnection(
             //        "jdbc:postgresql://localhost:5432/postgres", "postgres", "password");
-            // For mysql connection
+            // == For mysql connection ==
             dbConnection = DriverManager.getConnection("jdbc:mysql://localhost/sampledb?" +
                     "user=root&password=password");
             DatabaseMetaData dbmd = dbConnection.getMetaData();
-            ResultSet dbrs = dbmd.getTables(null, null, "%", null);
 
+            // initialize table names into list
+            ResultSet dbrs = dbmd.getTables(null, null, "%", null);
             tables = new ArrayList<String>();
             while (dbrs.next()) {
                 tables.add(dbrs.getString(3));
             }
             listTables.setListData(tables.toArray());
+            batchTablesList.setListData(tables.toArray());
+
+            // create Statement to work with
             stmt = dbConnection.createStatement(
                     ResultSet.TYPE_SCROLL_INSENSITIVE,
                     ResultSet.CONCUR_READ_ONLY);
@@ -57,16 +77,38 @@ public class gui_client extends JFrame{
             ex.printStackTrace();
             return;
         }
+
+        // initialize outputTable
         String[] emptyArray = {" ", " ", " ", " "};
         tableOutput.setModel(new DefaultTableModel(new String[][]{emptyArray, emptyArray, emptyArray, emptyArray, emptyArray, emptyArray, emptyArray}, emptyArray));
+        batchTableOutput.setModel(new DefaultTableModel(new String[][]{emptyArray, emptyArray, emptyArray, emptyArray, emptyArray, emptyArray, emptyArray}, emptyArray));
+        // initialize file dialog
+        fd = new FileDialog(this, "Choose a file", FileDialog.LOAD);
+        // fd.setDirectory("\\");   // Doesn't work for unknown reasons
+        // fd.setFile("*.xml");
+
+
+        // Event Actions Written below here
         listTables.addMouseListener(new MouseAdapter() {
             //@Override
             public void mouseClicked(MouseEvent mouseEvent) {
-                if (mouseEvent.getClickCount()==2) {
-                    String tableName = (tables.get(((JList)mouseEvent.getSource()).locationToIndex(mouseEvent.getPoint())) );
+                if (mouseEvent.getClickCount() == 2) {
+                    String tableName = (tables.get(((JList) mouseEvent.getSource()).locationToIndex(mouseEvent.getPoint())));
                     textInput.setText(textInput.getText() + " " + tableName + " ");
                     textInput.requestFocusInWindow();
                 }
+            }
+        });
+        loadFileButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent actionEvent) {
+                fd.setVisible(true);
+                String filename = fd.getDirectory() + fd.getFile();
+                if (filename == null)
+                    System.out.println("You cancelled the choice");
+                else
+                    System.out.println("You chose " + filename);
+                    readQueriesFromFile(filename);
             }
         });
         bttnExecute.addActionListener(new ActionListener() {
@@ -129,6 +171,51 @@ public class gui_client extends JFrame{
 
     private boolean validateQuery(String query){
         //code
+        return true;
+    }
+
+    private boolean readQueriesFromFile(String filePath) {
+        BufferedReader br = null;
+        String line = new String();
+        StringBuffer lineBuffer = new StringBuffer();
+
+        try {
+            br = new BufferedReader(new FileReader(filePath));
+            while((line = br.readLine()) != null)
+            {
+                lineBuffer.append(line + " ");
+            }
+            br.close();
+
+            // here is our splitter ! We use ";" as a delimiter for each request
+            // then we are sure to have well formed statements
+            String[] queries = lineBuffer.toString().split(";");
+            batchQueriesTextArea.setText("");
+            for(int i = 0; i<queries.length; i++)
+            {
+                // we ensure that there is no spaces before or after the request string
+                // in order to not execute empty statements
+                queries[i] = queries[i].trim();
+                if(!queries[i].equals(""))
+                {
+                    batchQueriesTextArea.append(queries[i] + ";\n");
+                    System.out.println(">> "+queries[i]);
+                }
+            }
+            batchQueriesTextArea.requestFocus();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        } finally {
+            if (br != null) {
+                try {
+                    br.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    return false;
+                }
+            }
+        }
         return true;
     }
 }
