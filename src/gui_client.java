@@ -1,10 +1,11 @@
 import javax.swing.*;
+import javax.swing.event.ListSelectionEvent;
+import javax.swing.event.ListSelectionListener;
 import javax.swing.table.DefaultTableModel;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
+import java.awt.event.*;
 import java.sql.*;
+import java.util.List;
+import java.util.ArrayList;
 
 /**
  * Created by shashwat on 7/27/14.
@@ -15,31 +16,37 @@ public class gui_client extends JFrame{
     private JTextField textInput;
     private JButton bttnExecute;
     private JTable tableOutput;
-    private JList list1;
-    private JButton clearButton;
-    private JButton resetButton;
-    private Connection dbConnection;
-    Statement stmt;
+    private JList listTables;
+    private JButton bttnClear;
+    private JButton bttnReset;
 
+    private Connection dbConnection;
+    private Statement stmt;
+    private List<String> tables;
 
     public gui_client(){
         super("SQL on Hadoop Client");
         setContentPane(rootPanel);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(550, 400);
-        //pack();
+        //setSize(550, 400);
+        pack();
 
         //Connect Database
         try {
+            // For postgres connection
             //dbConnection = DriverManager.getConnection(
             //        "jdbc:postgresql://localhost:5432/postgres", "postgres", "password");
+            // For mysql connection
             dbConnection = DriverManager.getConnection("jdbc:mysql://localhost/sampledb?" +
                     "user=root&password=password");
             DatabaseMetaData dbmd = dbConnection.getMetaData();
             ResultSet dbrs = dbmd.getTables(null, null, "%", null);
+
+            tables = new ArrayList<String>();
             while (dbrs.next()) {
-                System.out.println(dbrs.getString(3));
+                tables.add(dbrs.getString(3));
             }
+            listTables.setListData(tables.toArray());
             stmt = dbConnection.createStatement(
                     ResultSet.TYPE_SCROLL_INSENSITIVE,
                     ResultSet.CONCUR_READ_ONLY);
@@ -52,7 +59,16 @@ public class gui_client extends JFrame{
         }
         String[] emptyArray = {" ", " ", " ", " "};
         tableOutput.setModel(new DefaultTableModel(new String[][]{emptyArray, emptyArray, emptyArray, emptyArray, emptyArray, emptyArray, emptyArray}, emptyArray));
-
+        listTables.addMouseListener(new MouseAdapter() {
+            //@Override
+            public void mouseClicked(MouseEvent mouseEvent) {
+                if (mouseEvent.getClickCount()==2) {
+                    String tableName = (tables.get(((JList)mouseEvent.getSource()).locationToIndex(mouseEvent.getPoint())) );
+                    textInput.setText(textInput.getText() + " " + tableName + " ");
+                    textInput.requestFocusInWindow();
+                }
+            }
+        });
         bttnExecute.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent actionEvent) { // Button Clicked
