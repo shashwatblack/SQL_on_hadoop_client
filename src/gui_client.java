@@ -1,13 +1,12 @@
 import com.sun.org.apache.xpath.internal.operations.Variable;
 import com.sun.webpane.sg.CursorManagerImpl;
 
+import javax.imageio.ImageIO;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.awt.event.*;
-import java.io.BufferedReader;
-import java.io.FileReader;
-import java.io.IOException;
+import java.io.*;
 import java.sql.*;
 import java.util.List;
 import java.util.ArrayList;
@@ -31,6 +30,8 @@ public class gui_client extends JFrame{
     private JButton executeNextButton;
     private JButton executeAllButton;
     private JButton batchResetButton;
+    private JButton bttnSave;
+    private JButton batchSaveButton;
 
     private FileDialog fd;
 
@@ -42,7 +43,17 @@ public class gui_client extends JFrame{
         super("SQL on Hadoop Client");
         setContentPane(rootPanel);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        tabPanel.setSelectedIndex(1);
+        tabPanel.setSelectedIndex(0);
+        try {
+            bttnSave.setIcon(new ImageIcon(ImageIO.read(new File("resources/16_save.png"))));
+            bttnSave.setBorder(BorderFactory.createEmptyBorder());
+            bttnSave.setContentAreaFilled(false);
+            batchSaveButton.setIcon(new ImageIcon(ImageIO.read(new File("resources/16_save.png"))));
+            batchSaveButton.setBorder(BorderFactory.createEmptyBorder());
+            batchSaveButton.setContentAreaFilled(false);
+        } catch (IOException ex) {
+            ex.printStackTrace();
+        }
         //setSize(550, 400);
         pack();
 
@@ -70,8 +81,8 @@ public class gui_client extends JFrame{
 
         // initialize file dialog
         fd = new FileDialog(this, "Choose a file", FileDialog.LOAD);
-        // fd.setDirectory("\\");   // Doesn't work for unknown reasons
-        // fd.setFile("*.xml");
+        fd.setDirectory("\\");
+        //fd.setFile("*.csv");   // Doesn't work for unknown reasons
         resetClient();
 
         ///////////////////////////////////////////////////////
@@ -109,6 +120,18 @@ public class gui_client extends JFrame{
                 insertTableName(mouseEvent, textInput);
             }
         });
+        batchSaveButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent actionEvent) {
+                saveResults((DefaultTableModel) batchTableOutput.getModel(), "batchQueryResult");
+            }
+        });
+        bttnSave.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent actionEvent) {
+                saveResults((DefaultTableModel)tableOutput.getModel(), "queryResult");
+            }
+        });
         loadFileButton.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent actionEvent) {
@@ -121,10 +144,26 @@ public class gui_client extends JFrame{
         executeAllButton.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent actionEvent) {
+                boolean choice = JOptionPane.showConfirmDialog(null, "Do you want to save the output?",
+                        "Save Confirmation", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION;
+                File file; String fileName = "";
+                if (choice){
+                    //retrive save file name/location
+                    JFileChooser chooser = new JFileChooser( );
+                    chooser.setSelectedFile(new File("batchQueryResult" + ".csv"));
+                    int state = chooser.showSaveDialog(null);
+                    file = chooser.getSelectedFile();
+                    //if filename == null choice = NO
+                    if (file == null || state != JFileChooser.APPROVE_OPTION) {
+                        choice = false;
+                    } else {
+                        fileName = file.getPath();
+                    }
+                }
                 String[] queries = batchQueriesTextArea.getText().toString().split(";");
                 for(int i = 0; i<queries.length; i++)
                 {
-                    // we ensure that there is no spaces before or after the request string
+                    // we ensure that there are no spaces before or after the request string
                     // in order to not execute empty statements
                     queries[i] = queries[i].trim();
                     if(!queries[i].equals(""))
@@ -135,6 +174,14 @@ public class gui_client extends JFrame{
                                     != JOptionPane.YES_OPTION){
                                 break;
                             }
+                        } else if (choice) {    //successful query execution + File Save approval
+                            //save to file filename%i%.csv
+                            String[] parts = fileName.split("\\.(?!.*\\..*$)");
+                            file = new File(parts[0]+"_"+i+(parts.length>1?"."+parts[1]:""));
+                            if (file.exists() == true) {
+                                    file.delete();
+                            }
+                            writeToFile((DefaultTableModel)batchTableOutput.getModel(), file);
                         }
                     }
                 }
@@ -151,8 +198,7 @@ public class gui_client extends JFrame{
                     indices += queries[i].length()+1; //one for the semicolon by which it is split
                     if (indices>cursorPosition){
                         String q = queries[i];
-                        if(!q.trim().equals(""))
-                        {
+                        if(!q.trim().equals("")) {
                             executeQuery(q, batchTableOutput);
                         }
                         try {
@@ -164,7 +210,6 @@ public class gui_client extends JFrame{
                         break;
                     }
                 }
-
             }
         });
         bttnExecute.addActionListener(new ActionListener() {
@@ -183,9 +228,7 @@ public class gui_client extends JFrame{
         textInput.addMouseListener(new MouseAdapter(){
             @Override
             public void mouseClicked(MouseEvent e){
-                if (textInput.getText().equals("Write Query Here")) {
-                    textInput.selectAll();
-                }
+                if (textInput.getText().equals("Write Query Here")) textInput.selectAll();
             }
         });
         textInput.addKeyListener(new KeyListener() {
@@ -253,6 +296,12 @@ public class gui_client extends JFrame{
             }
             //output results
             outputTable.setModel(new DefaultTableModel(allRows, colNames));
+            //enable save buttons
+            if (outputTable == tableOutput) {
+                bttnSave.setEnabled(true);
+            } else {
+                batchSaveButton.setEnabled(true);
+            }
         }
         catch (SQLException ex){
             //ERROR Message Box
@@ -266,6 +315,59 @@ public class gui_client extends JFrame{
 
     private boolean validateQuery(String query){
         //code
+        return true;
+    }
+
+    private boolean saveResults(DefaultTableModel tableModel, String fileName){
+        JFileChooser chooser = new JFileChooser( );
+        chooser.setSelectedFile(new File(fileName + ".csv"));
+        int state = chooser.showSaveDialog(null);
+        File file = chooser.getSelectedFile();
+        if (file != null && state == JFileChooser.APPROVE_OPTION)
+        {
+            if (file.exists() == true) {
+                // confirm with the user
+                int i = JOptionPane.showConfirmDialog(null, "Overwrite " + file.getName() + "?", "Confirm Overwrite",
+                        JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE );
+                if (!(i != JOptionPane.YES_OPTION)) {
+                    file.delete();
+                }
+            }
+            if (writeToFile(tableModel, file)){
+                JOptionPane.showMessageDialog(null, "Success. Results saved in the file.");
+                return true;
+            }
+        }
+        return true;
+    }
+
+    private boolean writeToFile(DefaultTableModel tableModel, File file) {
+        try
+        {
+            BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(file,true));
+            PrintWriter fileWriter = new PrintWriter(bufferedWriter);
+            for(int i=0; i<tableModel.getRowCount() ; ++i)
+            {
+                for(int j=0; j<tableModel.getColumnCount(); ++j)
+                {
+                    String s;
+                    Object obj = tableModel.getValueAt(i, j);
+                    if (obj != null) {
+                        s = obj.toString().replaceAll(",", "");
+                        fileWriter.print(s + ",");
+                    }
+                    else {
+                        fileWriter.print(",");
+                    }
+                }
+                fileWriter.println("");
+            }
+            fileWriter.close();
+        } catch(Exception e)
+        {
+            JOptionPane.showMessageDialog(null, e.getMessage());
+            return false;
+        }
         return true;
     }
 
@@ -315,11 +417,18 @@ public class gui_client extends JFrame{
     }
 
     private boolean resetClient(){
+        // Clear output tables
         String[] eA = {" ", " ", " ", " "};
         tableOutput.setModel(new DefaultTableModel(new String[][]{eA, eA, eA, eA, eA, eA, eA}, eA));
         batchTableOutput.setModel(new DefaultTableModel(new String[][]{eA, eA, eA, eA, eA, eA, eA}, eA));
+        // Disable save buttons
+        bttnSave.setEnabled(false);
+        batchSaveButton.setEnabled(false);
+        // Set queries input area
         textInput.setText("Write Query Here");
+        textInput.setText("Select * from offices");
         batchQueriesTextArea.setText("");
+        // Reset table names in database
         try{
             DatabaseMetaData dbmd = dbConnection.getMetaData();
 
