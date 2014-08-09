@@ -1,5 +1,5 @@
-select * from myrecords;
-hello java;
-select * from table1 inner join table2
-where table1.id = 5
+select * from offices;
+select customerNumber, customerName from customers
+limit 5;
+select customers.customerNumber, orderNumber from customers natural join orders
 limit 10;

@@ -1,12 +1,11 @@
+import com.sun.org.apache.xpath.internal.operations.Variable;
+import com.sun.webpane.sg.CursorManagerImpl;
+
 import javax.swing.*;
-import javax.swing.event.ListSelectionEvent;
-import javax.swing.event.ListSelectionListener;
 import javax.swing.table.DefaultTableModel;
-import javax.swing.table.TableModel;
 import java.awt.*;
 import java.awt.event.*;
 import java.io.BufferedReader;
-import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.sql.*;
@@ -52,20 +51,11 @@ public class gui_client extends JFrame{
             // == For postgres connection ==
             //dbConnection = DriverManager.getConnection(
             //        "jdbc:postgresql://localhost:5432/postgres", "postgres", "password");
+            // dbConnection = DriverManager.getConnection(
+            //        "jdbc:postgresql://192.168.0.209:5432/postgres", "postgres", "password");
             // == For mysql connection ==
-            dbConnection = DriverManager.getConnection("jdbc:mysql://localhost/sampledb?" +
+             dbConnection = DriverManager.getConnection("jdbc:mysql://localhost/sampledb?" +
                     "user=root&password=password");
-            DatabaseMetaData dbmd = dbConnection.getMetaData();
-
-            // initialize table names into list
-            ResultSet dbrs = dbmd.getTables(null, null, "%", null);
-            tables = new ArrayList<String>();
-            while (dbrs.next()) {
-                tables.add(dbrs.getString(3));
-            }
-            listTables.setListData(tables.toArray());
-            batchTablesList.setListData(tables.toArray());
-
             // create Statement to work with
             stmt = dbConnection.createStatement(
                     ResultSet.TYPE_SCROLL_INSENSITIVE,
@@ -73,30 +63,50 @@ public class gui_client extends JFrame{
         }
         catch (SQLException ex){
             //ERROR Message Box
-            System.out.println(ex.toString());
+            JOptionPane.showMessageDialog(this, ex.getMessage());
             ex.printStackTrace();
-            return;
+            System.exit(1);
         }
 
-        // initialize outputTable
-        String[] emptyArray = {" ", " ", " ", " "};
-        tableOutput.setModel(new DefaultTableModel(new String[][]{emptyArray, emptyArray, emptyArray, emptyArray, emptyArray, emptyArray, emptyArray}, emptyArray));
-        batchTableOutput.setModel(new DefaultTableModel(new String[][]{emptyArray, emptyArray, emptyArray, emptyArray, emptyArray, emptyArray, emptyArray}, emptyArray));
         // initialize file dialog
         fd = new FileDialog(this, "Choose a file", FileDialog.LOAD);
         // fd.setDirectory("\\");   // Doesn't work for unknown reasons
         // fd.setFile("*.xml");
+        resetClient();
 
+        ///////////////////////////////////////////////////////
+        /////////// ALL EVENT ACTIONS WRITTEN BELOW ///////////
+        ///////////////////////////////////////////////////////
+        bttnClear.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent actionEvent) {
+                textInput.setText("");
+                textInput.requestFocusInWindow();
+            }
+        });
+        bttnReset.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent actionEvent) {
+                resetClient();
+            }
+        });
+        batchResetButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent actionEvent) {
+                resetClient();
+            }
+        });
+        batchTablesList.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent mouseEvent) {
+                insertTableName(mouseEvent, batchQueriesTextArea);
+            }
+        });
 
-        // Event Actions Written below here
         listTables.addMouseListener(new MouseAdapter() {
             //@Override
             public void mouseClicked(MouseEvent mouseEvent) {
-                if (mouseEvent.getClickCount() == 2) {
-                    String tableName = (tables.get(((JList) mouseEvent.getSource()).locationToIndex(mouseEvent.getPoint())));
-                    textInput.setText(textInput.getText() + " " + tableName + " ");
-                    textInput.requestFocusInWindow();
-                }
+                insertTableName(mouseEvent, textInput);
             }
         });
         loadFileButton.addActionListener(new ActionListener() {
@@ -104,11 +114,57 @@ public class gui_client extends JFrame{
             public void actionPerformed(ActionEvent actionEvent) {
                 fd.setVisible(true);
                 String filename = fd.getDirectory() + fd.getFile();
-                if (filename == null)
-                    System.out.println("You cancelled the choice");
-                else
-                    System.out.println("You chose " + filename);
+                if (filename != null)
                     readQueriesFromFile(filename);
+            }
+        });
+        executeAllButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent actionEvent) {
+                String[] queries = batchQueriesTextArea.getText().toString().split(";");
+                for(int i = 0; i<queries.length; i++)
+                {
+                    // we ensure that there is no spaces before or after the request string
+                    // in order to not execute empty statements
+                    queries[i] = queries[i].trim();
+                    if(!queries[i].equals(""))
+                    {
+                        if (!executeQuery(queries[i], batchTableOutput)) {
+                            String [] msg = {"Do you wish to continue with execution?", "There's been an error"};
+                            if (JOptionPane.showConfirmDialog(null, msg[0], msg[1], JOptionPane.YES_NO_OPTION)
+                                    != JOptionPane.YES_OPTION){
+                                break;
+                            }
+                        }
+                    }
+                }
+                JOptionPane.showMessageDialog(null, "All queries executed.");
+            }
+        });
+        executeNextButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent actionEvent) {
+                int cursorPosition = batchQueriesTextArea.getCaretPosition();
+                String[] queries = batchQueriesTextArea.getText().toString().split(";");
+                int indices = 0;
+                for (int i = 0; i < queries.length; i++) {
+                    indices += queries[i].length()+1; //one for the semicolon by which it is split
+                    if (indices>cursorPosition){
+                        String q = queries[i];
+                        if(!q.trim().equals(""))
+                        {
+                            executeQuery(q, batchTableOutput);
+                        }
+                        try {
+                            batchQueriesTextArea.setCaretPosition(indices + queries[i + 1].length() - queries[i + 1].replaceAll("^\\s*", "").length());
+                        } catch (IndexOutOfBoundsException ex){
+                            batchQueriesTextArea.setCaretPosition(batchQueriesTextArea.getText().length());
+                        }
+                        batchQueriesTextArea.requestFocusInWindow();
+                        break;
+                    }
+                }
+
             }
         });
         bttnExecute.addActionListener(new ActionListener() {
@@ -120,42 +176,7 @@ public class gui_client extends JFrame{
                 //Validate query
                 validateQuery(inputQuery);
                 //execute query
-                System.out.println("Executing \"" + inputQuery + "\"");
-                try {
-                    ResultSet rs = stmt.executeQuery(inputQuery);
-                    System.out.println("Query executed");
-                    ResultSetMetaData rsmd = rs.getMetaData();
-                    int colCount = rsmd.getColumnCount();
-                    String[] colNames = new String[colCount];
-                    for (int i = 0; i < colCount; i++) {
-                        colNames[i] = rsmd.getColumnName(i+1);
-                    }
-                    String[] row = new String[colCount];
-                    int rowCount = 0;
-                    try {
-                        rs.last();
-                        rowCount = rs.getRow();
-                        rs.beforeFirst();
-                    }
-                    catch(Exception ex) {
-                        ex.printStackTrace();
-                    }
-                    String[][] allRows = new String[rowCount][colCount];
-                    int count = 0;
-                    while (rs.next()) {
-                        for (int i = 0; i < colCount; i++) {
-                            allRows[count][i] = rs.getString(i + 1);
-                        }
-                        count++;
-                    }
-                    //output results
-                    tableOutput.setModel(new DefaultTableModel(allRows, colNames));
-                }
-                catch (SQLException ex){
-                    //ERROR Message Box
-                    System.out.println("Something's wrong - " + ex.toString());
-                    ex.printStackTrace();
-                }
+                executeQuery(inputQuery, tableOutput);
 
             }
         });
@@ -167,6 +188,80 @@ public class gui_client extends JFrame{
                 }
             }
         });
+        textInput.addKeyListener(new KeyListener() {
+            @Override
+            public void keyTyped(KeyEvent keyEvent) {
+                if ( keyEvent.getKeyChar() == '\n'){
+                    bttnExecute.doClick();
+                }
+            }
+            @Override
+            public void keyPressed(KeyEvent keyEvent) {}
+            @Override
+            public void keyReleased(KeyEvent keyEvent) {}
+        });
+    }
+    private void insertTableName(MouseEvent mouseEvent, javax.swing.text.JTextComponent textBox){
+        if (mouseEvent.getClickCount() == 2) {
+            String tableName = (tables.get(((JList) mouseEvent.getSource()).locationToIndex(mouseEvent.getPoint())));
+            String query = textBox.getText();
+            int cursorBegin = textBox.getSelectionStart();
+            int cursorEnd = textBox.getSelectionEnd();
+            if (cursorBegin == cursorEnd) {
+                if (cursorEnd == query.length()) {
+                    textBox.setText(query + " " + tableName + " ");
+                    textBox.setCaretPosition(cursorEnd + tableName.length() + 2);
+                } else {
+                    textBox.setText(query.substring(0, cursorEnd) + tableName + query.substring(cursorEnd));
+                    textBox.setCaretPosition(cursorEnd + tableName.length());
+                }
+            } else {
+                textBox.setText(query.substring(0, cursorBegin) + tableName + query.substring(cursorEnd));
+                textBox.setCaretPosition(cursorBegin + tableName.length());
+            }
+            textBox.requestFocusInWindow();
+        }
+    }
+
+    private boolean executeQuery(String inputQuery, JTable outputTable){
+        System.out.println("Executing \"" + inputQuery + "\"");
+        try {
+            ResultSet rs = stmt.executeQuery(inputQuery);
+            System.out.println("Query executed");
+            ResultSetMetaData rsmd = rs.getMetaData();
+            int colCount = rsmd.getColumnCount();
+            String[] colNames = new String[colCount];
+            for (int i = 0; i < colCount; i++) {
+                colNames[i] = rsmd.getColumnName(i+1);
+            }
+            int rowCount = 0;
+            try {
+                rs.last();
+                rowCount = rs.getRow();
+                rs.beforeFirst();
+            }
+            catch(Exception ex) {
+                ex.printStackTrace();
+            }
+            String[][] allRows = new String[rowCount][colCount];
+            int count = 0;
+            while (rs.next()) {
+                for (int i = 0; i < colCount; i++) {
+                    allRows[count][i] = rs.getString(i + 1);
+                }
+                count++;
+            }
+            //output results
+            outputTable.setModel(new DefaultTableModel(allRows, colNames));
+        }
+        catch (SQLException ex){
+            //ERROR Message Box
+            JOptionPane.showMessageDialog(null, ex.getMessage());
+            System.out.println("Something's wrong - " + ex.getMessage());
+            ex.printStackTrace();
+            return false;
+        }
+        return true;
     }
 
     private boolean validateQuery(String query){
@@ -176,7 +271,7 @@ public class gui_client extends JFrame{
 
     private boolean readQueriesFromFile(String filePath) {
         BufferedReader br = null;
-        String line = new String();
+        String line;
         StringBuffer lineBuffer = new StringBuffer();
 
         try {
@@ -217,5 +312,38 @@ public class gui_client extends JFrame{
             }
         }
         return true;
+    }
+
+    private boolean resetClient(){
+        String[] eA = {" ", " ", " ", " "};
+        tableOutput.setModel(new DefaultTableModel(new String[][]{eA, eA, eA, eA, eA, eA, eA}, eA));
+        batchTableOutput.setModel(new DefaultTableModel(new String[][]{eA, eA, eA, eA, eA, eA, eA}, eA));
+        textInput.setText("Write Query Here");
+        batchQueriesTextArea.setText("");
+        try{
+            DatabaseMetaData dbmd = dbConnection.getMetaData();
+
+            // initialize table names into list
+            ResultSet dbrs = dbmd.getTables(null, null, "%", null);
+            tables = new ArrayList<String>();
+            while (dbrs.next()) {
+                tables.add(dbrs.getString(3));
+            }
+            listTables.setListData(tables.toArray());
+            batchTablesList.setListData(tables.toArray());
+        } catch (SQLException ex) {
+            JOptionPane.showMessageDialog(this, ex.getMessage());
+            ex.printStackTrace();
+            return false;
+        }
+        return true;
+    }
+
+    private void showMessage(JFrame frame, String msg){
+        JOptionPane.showMessageDialog(
+                frame,
+                "<html><body><p style='width: 300px;'>"+msg+"</body></html>",
+                "Error",
+                JOptionPane.ERROR_MESSAGE);
     }
 }
